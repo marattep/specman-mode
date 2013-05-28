@@ -1,23 +1,23 @@
 ;; @(#) specman-mode.el -- Mode for editing specman files
-;; @(#) $Id: specman-mode.el,v 1.22 2005/08/08 14:39:13 urim Exp $
+;; @(#) $Id: specman-mode.el,v 1.23 2013/05/23 07:03:00 pouyet Exp $
 ;; @(#) $Keywords: tools $
-;; $KnownCompatibility: 19.28 $
+;; $KnownCompatibility: 24.3 $
 
 ;; This file is not part of Emacs
 
 
-;; Copyright (C) 2006 Cadence Design Systems, Inc.
+;; Copyright (C) 2013 Cadence Design Systems, Inc.
 ;; Authors:      Uri Maoz <urim@cadence.com>
 ;;               Michael McNamara <mac@cadence.com>
 ;;               Yaron Peri <yperi@cadence.com>
 ;; Maintainer:   
-;; Created:      May 5 2000
+;; Created:      May 25 2013
 
 
 ;; LCD Archive Entry:
 ;; specman-mode|Michael McNamara|mac@verisity.com|
 ;; Specman Major mode. auto indents, colorizes, code in the 'e language|
-;; 05-May-2000|$Revision: 1.22 $|~/misc/specman-mode.el.Z|
+;; 25-May-2013|$Revision: 1.23 $|~/misc/specman-mode.el.Z|
 
 ;; COPYRIGHT NOTICE
 ;;
@@ -64,8 +64,9 @@
 ;;
 ;;  specman-mode is a major mode for editing code written in the 'e' language
 ;;
+(require 'cl)
 
-(defconst specman-mode-version "$$Revision: 1.22 $$"
+(defconst specman-mode-version "$$Revision: 1.23 $$"
   "Version of this Specman mode.")
 
 (defun specman-version ()
@@ -137,18 +138,18 @@
 	(defmacro customize (&rest args)
 	  (message "Sorry, Customize is not available with this version of emacs"))
 	(defmacro defcustom (var value doc &rest args)
-	  (` (defvar (, var) (, value) (, doc))))
+	  `(defvar ,var ,value , doc))
 	)
       (if (fboundp 'defface)
 	  nil ;; great!
 	(defmacro defface (var value doc &rest args)
-	  (` (make-face (, var))))
+	  `(make-face ,var))
 	)
       (if (and (featurep 'custom) (fboundp 'customize-group))
 	  nil ;; We've got what we needed
 	;; We have an intermediate custom-library, hack around it!
 	(defmacro customize-group (var &rest args)
-	  (`(customize (, var) )))
+	  `(customize ,var) )
 	)
       (if (and (featurep 'custom) (fboundp 'custom-declare-variable))
 	  nil ;; We've got what we needed
@@ -157,14 +158,14 @@
 	(defmacro customize (&rest args)
 	  (message "Sorry, Customize is not available with this version of emacs"))
 	(defmacro defcustom (var value doc &rest args)
-	  (` (defvar (, var) (, value) (, doc))))
+	  `(defvar ,var ,value ,doc))
 	)
       
       (if (and (featurep 'custom) (fboundp 'customize-group))
 	  nil ;; We've got what we needed
 	;; We have an intermediate custom-library, hack around it!
 	(defmacro customize-group (var &rest args)
-	  (`(customize (, var) )))
+	  `(customize ,var))
 	)
       (condition-case nil
           (require 'easymenu)
@@ -205,7 +206,7 @@
   :group 'languages
   )
 
-(defcustom specman-basic-offset 4
+(defcustom specman-basic-offset 3
   "*Indentation of Specman statements with respect to containing block."
   :group 'specman-mode
   :type 'integer
@@ -245,7 +246,7 @@
   :type 'boolean
   )
 
-(defcustom specman-max-line-length 80
+(defcustom specman-max-line-length 150
   "*The maximum number of characters that should be in a line."
   :group 'specman-mode
   :type 'integer
@@ -407,13 +408,14 @@ format (e.g. 09/17/1997) is not supported."
   "cover[ \t\n]+\\([A-Za-z0-9_]+\\)[ \t\n]+is"
   "Regexp that identifies cover definitions (arg 1)")
 
+(eval-and-compile
 (defconst specman-symbol-begin-regexp
   "\\<"
   "Regexp that identifies the beginning of a symbol")
 
 (defconst specman-symbol-end-regexp
   "\\>"
-  "Regexp that identifies the end of a symbol")
+  "Regexp that identifies the end of a symbol"))
 
 (defconst specman-number-regexp
   (concat
@@ -748,7 +750,7 @@ scope, matching-scope and parent-scope-opener"
                    :paren-parent nil))
             scope-index)
       
-      (when (re-search-forward "^<'" buffer-end nil)
+      (when (re-search-forward "^<'" buffer-end t)
         (while (and (< (point) buffer-end)
                     (re-search-forward search-regexp buffer-end 'move))
           
@@ -3135,7 +3137,7 @@ See also `specman-font-lock-extra-types'.")
 
 ;;; Hacks for FSF
 (require 'font-lock)
-(defvar specman-need-fld 1)
+(defvar specman-need-fld nil)
 (defvar font-lock-defaults-alist nil)	;In case we are XEmacs
 (if specman-need-fld
     (let ((specman-mode-defaults
@@ -3204,7 +3206,10 @@ Key Bindings:
   (setq parse-sexp-ignore-comments t)
   (make-local-variable 'indent-line-function)
   (setq indent-line-function 'specman-indent-line)
-  
+  (set (make-local-variable 'font-lock-defaults)
+	(get 'specman-mode 'font-lock-defaults))
+ 
+ 
   (make-local-variable 'comment-start)
   (make-local-variable 'comment-end)
   (make-local-variable 'block-comment-start)
@@ -3448,7 +3453,7 @@ Key Bindings:
                 (goto-char lim)
                 (if (equal (point) ;; enter the scope
                            (point-min))
-                    (re-search-forward "^<'")
+                    (re-search-forward "^<'" nil t)
                   (forward-char 1))
                 (specman-forward-ws)
                 (forward-to-indentation 0)
@@ -5371,7 +5376,7 @@ the user to edit."
 ;; =============================================================================
 ;; Require package filladapt
 
-(require 'filladapt)
+(when (require 'filladapt nil t)
 
 (add-hook 'specman-mode-hook
   '(lambda () (auto-fill-mode 1)))
@@ -5384,7 +5389,7 @@ the user to edit."
 ; C++ style comments are already recognized.
 (setcar filladapt-token-table '("---*" e-comment))
 (setcar filladapt-token-match-table '(e-comment e-comment))
-(setcar filladapt-token-conversion-table '(e-comment . exact))
+(setcar filladapt-token-conversion-table '(e-comment . exact)))
 
 
 
@@ -5530,4 +5535,3 @@ the user to edit."
 (run-hooks 'specman-mode-load-hook)
  
 ;;; specman-mode.el ends here
-
